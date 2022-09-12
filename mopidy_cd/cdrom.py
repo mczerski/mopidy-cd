@@ -1,11 +1,11 @@
-from __future__ import absolute_import, unicode_literals
-
 import logging
 import math
 
 import musicbrainzngs
 
-from collections import Mapping, namedtuple
+
+from collections import namedtuple
+from collections.abc import Mapping
 from datetime import timedelta
 
 from mopidy.audio.scan import Scanner
@@ -22,12 +22,13 @@ Disc = namedtuple('Disc', 'id discid title year discs artists images tracks')
 
 CD_PROTOCOL = 'cdda://'
 UNKNOWN_DISC = Disc(None, None, 'Unknown CD', '', 1, (), (), ())
+UNKNOWN_ARTIST = Artist(None, 'Unknown', 'Unknown')
 
 
 musicbrainzngs.set_useragent(Extension.dist_name, Extension.version)
 
 
-class DiscID(object):
+class DiscID:
 
     id = None
     toc = ''
@@ -56,7 +57,7 @@ class DiscID(object):
         return int(math.floor(sectors / 75.0 + 0.5))
 
 
-class CdRom(object):
+class CdRom:
 
     disc = UNKNOWN_DISC
 
@@ -96,8 +97,8 @@ class CdRom(object):
                 id=release['id'],
                 discid=discid.id,
                 title=release['title'],
-                discs=release['medium-count'],
-                year=release['date'],
+                discs=release.get('medium-count'),
+                year=release.get('date', '1900'),
                 images=CdRom._extract_images(images['images']),
                 artists=CdRom._extract_artists(release['artist-credit']),
                 tracks=CdRom._extract_tracks(discid, release['medium-list'])
@@ -128,14 +129,26 @@ class CdRom(object):
     @staticmethod
     def _extract_tracks(discid, medium_list=()):
         def match_by_discid(medium):
-            if medium.get('format', '').lower() != 'cd':
+            if medium.get('format', 'cd').lower() != 'cd':
                 return False
             return any(disc['id'] == discid.id for disc in medium['disc-list'])
+
+        def match_by_format(medium):
+            if medium.get('format', 'cd').lower() != 'cd':
+                return False
+            return True
 
         cd = next(
             (medium for medium in medium_list if match_by_discid(medium)),
             None
         )
+
+        if cd is None:
+            cd = next(
+                (medium for medium in medium_list if match_by_format(medium)),
+                None
+            )
+
         if cd:
             disc_num = int(cd['position'])
             tracks = cd['track-list']
@@ -172,5 +185,5 @@ class CdRom(object):
             number=track[0],
             disc_number=1,
             duration=track[1] * 1000,
-            artists=()
+            artists=(UNKNOWN_ARTIST,)
         )
