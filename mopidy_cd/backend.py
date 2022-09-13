@@ -11,7 +11,7 @@ from .cdrom import CD_PROTOCOL, UNKNOWN_DISC, CdRom
 
 logger = logging.getLogger(__name__)
 
-ROOT_URI = 'cd:/'
+ROOT_URI = 'cd://'
 
 
 class CdBackend(pykka.ThreadingActor, backend.Backend):
@@ -37,9 +37,9 @@ class CdLibrary(backend.LibraryProvider):
             return [
                 Ref.album(uri=self._cd_root_uri, name=album.name)
             ]
-        else:
+        elif uri == self._cd_root_uri:
             return [
-                Ref.track(uri=self._cd_root_uri + str(track.number), name=track.title)
+                Ref.track(uri=self._cd_root_uri + '/' + str(track.number), name=track.title)
                 for track in self.cdrom.disc.tracks
             ]
 
@@ -54,6 +54,8 @@ class CdLibrary(backend.LibraryProvider):
         disc = self.cdrom.disc
         album = CdLibrary._make_album(self._cd_root_uri, disc)
         track_path = uri[len(self._cd_root_uri):]
+        if track_path.startswith('/'):
+            track_path = track_path[1:]
         if track_path:
             try:
                 track_number = int(track_path)
@@ -74,7 +76,7 @@ class CdLibrary(backend.LibraryProvider):
 
     def refresh(self, uri=None):
         self.cdrom.read()
-        self._cd_root_uri = ROOT_URI + str(self.cdrom.disc.discid) + '/'
+        self._cd_root_uri = ROOT_URI + str(self.cdrom.disc.discid)
 
     def search(self, query=None, uris=None, exact=False):
         def match(subvalue, value):
@@ -145,7 +147,7 @@ class CdLibrary(backend.LibraryProvider):
     @staticmethod
     def _make_track(uri, album, track_tuple):
         return Track(
-            uri=uri + str(track_tuple.number),
+            uri=uri + '/' + str(track_tuple.number),
             musicbrainz_id=track_tuple.id,
             name=track_tuple.title,
             length=track_tuple.duration,
@@ -160,4 +162,3 @@ class CdPlayback(backend.PlaybackProvider):
 
     def translate_uri(self, uri):
         return CD_PROTOCOL + uri[len(ROOT_URI):].split('/', maxsplit=1)[1]
-        return uri.replace(BASE_URI, CD_PROTOCOL)
